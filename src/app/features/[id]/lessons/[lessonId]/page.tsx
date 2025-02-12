@@ -11,6 +11,8 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface LessonContent {
   title: string;
@@ -56,6 +58,8 @@ export default function LessonPage({
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<PageType>('content');
   const [exerciseStates, setExerciseStates] = useState<Record<number, ExerciseState>>({});
+  const [studyPlan, setStudyPlan] = useState<any>(null); // Keep track of the entire study plan
+  const [currentLessonIndex, setCurrentLessonIndex] = useState<{ chapterIndex: number, lessonIndex: number }>({ chapterIndex: -1, lessonIndex: -1, });
 
   useEffect(() => {
     async function fetchLessonContent() {
@@ -81,19 +85,26 @@ export default function LessonPage({
           return;
         }
 
-        const studyPlan = JSON.parse(studyPlanData.content);
+        const parsedStudyPlan = JSON.parse(studyPlanData.content);
+        setStudyPlan(parsedStudyPlan); // Store the entire study plan
         let lessonInfo = null;
+        let foundChapterIndex = -1;
+        let foundLessonIndex = -1;
 
         // Find the lesson in the study plan
-        for (const chapter of studyPlan.chapters) {
-          const lesson = chapter.lessons.find((l: { title: string }) => 
+        for (let i = 0; i < parsedStudyPlan.chapters.length; i++) {
+          const chapter = parsedStudyPlan.chapters[i];
+          const lessonIndex = chapter.lessons.findIndex((l: { title: string }) => 
             l.title.toLowerCase().replace(/\s+/g, '-') === params.lessonId
           );
-          if (lesson) {
-            lessonInfo = lesson;
+          if (lessonIndex !== -1) {
+            lessonInfo = chapter.lessons[lessonIndex];
+            foundChapterIndex = i;
+            foundLessonIndex = lessonIndex;
             break;
           }
         }
+        setCurrentLessonIndex({ chapterIndex: foundChapterIndex, lessonIndex: foundLessonIndex });
 
         if (!lessonInfo) {
           setError('Lesson not found');
@@ -128,9 +139,9 @@ export default function LessonPage({
 
         // If no existing content or parsing failed, generate new content
         console.log('Calling Edge Function with:', {
-            lessonTitle: lessonInfo.title,
-            lessonDescription: lessonInfo.description,
-            keyPoints: lessonInfo.keyPoints,
+          lessonTitle: lessonInfo.title,
+          lessonDescription: lessonInfo.description,
+          keyPoints: lessonInfo.keyPoints,
         });
 
         const { data: generatedContent, error: functionError } = await supabase.functions.invoke(
@@ -204,6 +215,7 @@ export default function LessonPage({
       </div>
 
       <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Content</h2>
         <div className="whitespace-pre-wrap">{lessonContent?.content}</div>
       </div>
 
@@ -215,9 +227,9 @@ export default function LessonPage({
               <div key={index} className="bg-white p-4 rounded-lg border">
                 <h3 className="font-medium mb-2">{example.title}</h3>
                 {example.code && (
-                  <pre className="bg-gray-50 p-4 rounded-md mb-2 overflow-x-auto">
-                    <code>{example.code}</code>
-                  </pre>
+                  <SyntaxHighlighter language="javascript" style={atomDark}>
+                    {example.code}
+                  </SyntaxHighlighter>
                 )}
                 <p>{example.explanation}</p>
               </div>
@@ -350,7 +362,7 @@ export default function LessonPage({
       <div className="space-y-12">
         {lessonContent?.exercises.map((exercise, index) => (
           <div key={index} className="bg-white p-6 rounded-lg border">
-            <p className="font-medium text-lg mb-4">Exercise {index + 1}:</p>
+            <h3 className="font-medium text-lg mb-4">Exercise {index + 1}:</h3>
             <p className="mb-6">{exercise.question}</p>
             
             <div className="space-y-4">
@@ -392,6 +404,46 @@ export default function LessonPage({
       </div>
     </div>
   );
+
+  const navigateToNextLesson = () => {
+    if (!studyPlan) return;
+
+    const { chapterIndex, lessonIndex } = currentLessonIndex;
+    if (chapterIndex === -1 || lessonIndex === -1) return;
+
+    const currentChapter = studyPlan.chapters[chapterIndex];
+
+    // Check if there's a next lesson in the current chapter
+    if (lessonIndex < currentChapter.lessons.length - 1) {
+      const nextLesson = currentChapter.lessons[lessonIndex + 1];
+      router.push(`/features/${params.id}/lessons/${nextLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
+    } else if (chapterIndex < studyPlan.chapters.length - 1) {
+      // If it's the last lesson of the chapter, go to the first lesson of the next chapter
+      const nextChapter = studyPlan.chapters[chapterIndex + 1];
+      if (nextChapter.lessons.length > 0) {
+        const nextLesson = nextChapter.lessons[0];
+        router.push(`/features/${params.id}/lessons/${nextLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
+      }
+    }
+  };
+
+  const navigateToPreviousLesson = () => {
+    if (!studyPlan) return;
+
+    const { chapterIndex, lessonIndex } = currentLessonIndex;
+    if (chapterIndex === -1 || lessonIndex === -1) return;
+
+    // Check if there is a previous lesson within the current chapter
+    if (lessonIndex > 0) {
+      const previousLesson = studyPlan.chapters[chapterIndex].lessons[lessonIndex - 1];
+      router.push(`/features/${params.id}/lessons/${previousLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
+    } else if (chapterIndex > 0) {
+      // If it's the first lesson of the chapter, go to the last lesson of the previous chapter
+      const previousChapter = studyPlan.chapters[chapterIndex - 1];
+      const previousLesson = previousChapter.lessons[previousChapter.lessons.length - 1];
+      router.push(`/features/${params.id}/lessons/${previousLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -454,28 +506,29 @@ export default function LessonPage({
 
         <div className="flex justify-between items-center mt-8">
           <div>
-            {currentPage === 'questions' && (
-              <Button
-                onClick={() => setCurrentPage('content')}
-                className="flex items-center gap-2"
-                variant="outline"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Previous: Content
-              </Button>
-            )}
+            <Button
+              onClick={navigateToPreviousLesson}
+              disabled={currentLessonIndex.chapterIndex === 0 && currentLessonIndex.lessonIndex === 0}
+              className="flex items-center gap-2"
+              variant="outline"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Previous
+            </Button>
           </div>
           
           <div>
-            {currentPage === 'content' && (
-              <Button
-                onClick={() => setCurrentPage('questions')}
-                className="flex items-center gap-2"
-              >
-                Next: Practice Questions
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            )}
+            <Button
+              onClick={navigateToNextLesson}
+              disabled={
+                currentLessonIndex.chapterIndex === studyPlan.chapters.length - 1 &&
+                currentLessonIndex.lessonIndex === studyPlan.chapters[currentLessonIndex.chapterIndex].lessons.length - 1
+              }
+              className="flex items-center gap-2"
+            >
+              Next
+              <ArrowRight className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </div>

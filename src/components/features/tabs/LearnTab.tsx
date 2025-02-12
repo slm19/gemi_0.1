@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Brain, BookOpen, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { Brain, BookOpen, Clock, ChevronDown, ChevronRight, CheckCircle2, Check } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { supabase } from '@/lib/supabase/supabaseClient';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -14,6 +14,9 @@ import { generateStudyPlan as generateStudyPlanEdge } from '@/lib/supabase/edgeF
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ChapterDisplay } from './ChapterDisplay';
 import { LessonDisplay } from './LessonDisplay';
+import { Checkbox } from "@/components/ui/checkbox"
+import { motion } from 'framer-motion';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 interface Document {
   id: string;
@@ -94,6 +97,9 @@ export function LearnTab({ documents = [], folderId }: Props) {
   const GENERATION_TIMEOUT = 60000; // 60 seconds timeout
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
   const [expandedLessons, setExpandedLessons] = useState<Record<string, boolean>>({});
+  const [userProgress, setUserProgress] = useState<Record<string, boolean>>({}); // lessonId: completed
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const router = useRouter();
 
   // Debug state changes
@@ -190,14 +196,72 @@ export function LearnTab({ documents = [], folderId }: Props) {
     }
   }, [folderId, user]);
 
-  // Add useEffect to fetch study plan on mount
+  const fetchUserProgress = useCallback(async () => {
+    if (!user || !folderId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('lesson_id, completed')
+        .eq('user_id', user.id)
+        .eq('folder_id', folderId);
+
+      if (error) throw error;
+      if(data){
+        const progress: Record<string, boolean> = {};
+        data.forEach(item => {
+          progress[item.lesson_id] = item.completed;
+        });
+        setUserProgress(progress);
+      }
+
+    } catch (error) {
+      console.error('Error fetching user progress:', error);
+      // Don't set an error here, just log it. We don't want to prevent
+      // the study plan from loading if progress fetching fails.
+    }
+  }, [user, folderId]);
+
+  const handleToggleComplete = useCallback(async (chapterTitle: string, lessonTitle: string) => {
+    if (!user || !folderId) return;
+
+    const lessonId = `${chapterTitle}-${lessonTitle}`;
+    const newCompletedStatus = !userProgress[lessonId];
+
+    try {
+      const { error } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: user.id,
+          folder_id: folderId,
+          lesson_id: lessonId,
+          completed: newCompletedStatus,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id,folder_id,lesson_id' });
+
+      if (error) throw error;
+
+      // Optimistically update the local state
+      setUserProgress(prev => ({
+        ...prev,
+        [lessonId]: newCompletedStatus
+      }));
+    } catch (error) {
+      console.error('Error updating lesson completion status:', error);
+      // Optionally, revert the optimistic update on error
+    }
+  }, [user, folderId, userProgress]);
+
+  // Add useEffect to fetch study plan and user progress on mount
   useEffect(() => {
     if (folderId && user) {
       setLoading(true);
       fetchStudyPlan()
+        .then(() => fetchUserProgress())
         .finally(() => setLoading(false));
     }
-  }, [folderId, user, fetchStudyPlan]);
+  }, [folderId, user, fetchStudyPlan, fetchUserProgress]);
 
   const retryWithDelay = async (operation: () => Promise<void>) => {
     try {
@@ -335,6 +399,31 @@ export function LearnTab({ documents = [], folderId }: Props) {
     return `${seconds}s`;
   };
 
+  const calculateOverallProgress = useCallback(() => {
+    if (!studyPlan?.chapters) {
+      return 0;
+    }
+
+    let totalLessons = 0;
+    let completedLessons = 0;
+
+    studyPlan.chapters.forEach(chapter => {
+      chapter.lessons.forEach(lesson => {
+        totalLessons++;
+        const lessonId = `${chapter.title}-${lesson.title}`;
+        if (userProgress[lessonId]) {
+          completedLessons++;
+        }
+      });
+    });
+
+    return totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+  }, [studyPlan, userProgress]);
+
+  useEffect(() => {
+    setOverallProgress(calculateOverallProgress());
+  }, [calculateOverallProgress]);
+
   if (!documents || documents.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -353,6 +442,12 @@ export function LearnTab({ documents = [], folderId }: Props) {
               <BookOpen className="w-5 h-5 text-blue-500" />
               Your Learning Path
             </CardTitle>
+            {overallProgress > 0 && (
+              <div className="flex items-center gap-2 mt-1">
+                <Progress value={overallProgress} className="h-2 w-32" />
+                <span className="text-xs text-muted-foreground">{overallProgress}% Complete</span>
+              </div>
+            )}
             {generationTime && !loading && !isGenerating && (
               <p className="text-xs text-muted-foreground mt-1">
                 Generated in {formatGenerationTime(generationTime)}
@@ -372,7 +467,8 @@ export function LearnTab({ documents = [], folderId }: Props) {
                     isGenerating,
                     generationStatus,
                     expandedChapters,
-                    expandedLessons
+                    expandedLessons,
+                    userProgress
                   });
                 }}
               >
@@ -380,14 +476,33 @@ export function LearnTab({ documents = [], folderId }: Props) {
               </Button>
             )}
             {!loading && !isGenerating && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={generateStudyPlan}
-                disabled={loading || isGenerating}
-              >
-                Regenerate Plan
-              </Button>
+              <Dialog open={isRegenerating} onOpenChange={setIsRegenerating}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsRegenerating(true)}
+                    disabled={loading || isGenerating}
+                  >
+                    Regenerate Plan
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Regenerate Study Plan?</DialogTitle>
+                    <DialogDescription>
+                      Are you sure you want to regenerate the study plan? This will overwrite the existing plan, but your completion progress will be preserved.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsRegenerating(false)}>Cancel</Button>
+                    <Button onClick={() => {
+                      setIsRegenerating(false);
+                      generateStudyPlan();
+                    }}>Confirm</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </CardHeader>
@@ -420,13 +535,13 @@ export function LearnTab({ documents = [], folderId }: Props) {
                 } />
               </div>
             ) : error ? (
-                <Alert variant="destructive">
-                  <Brain className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>
-                    {getUserFriendlyErrorMessage(error)}
-                  </AlertDescription>
-                </Alert>
+              <Alert variant="destructive">
+                <Brain className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>
+                  {getUserFriendlyErrorMessage(error)}
+                </AlertDescription>
+              </Alert>
             ) : studyPlan?.chapters && studyPlan.chapters.length > 0 ? (
               <div className="space-y-6">
                 {studyPlan.chapters.map((chapter, chapterIndex) => (
@@ -438,6 +553,8 @@ export function LearnTab({ documents = [], folderId }: Props) {
                     expandedLessons={expandedLessons}
                     onToggleLesson={toggleLesson}
                     navigateToLesson={navigateToLesson}
+                    userProgress={userProgress}
+                    onToggleComplete={handleToggleComplete}
                   />
                 ))}
               </div>

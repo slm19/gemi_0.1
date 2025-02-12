@@ -165,4 +165,42 @@ This configuration sets up:
    - Files are stored in user-specific paths
    - Metadata and storage are linked through the path field
    - Study plans are linked to folders and users
-*/ 
+*/
+
+-- Add user_progress table
+CREATE TABLE user_progress (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    folder_id UUID REFERENCES folders(id) ON DELETE CASCADE NOT NULL,
+    lesson_id TEXT NOT NULL,  -- Store lesson ID (e.g., "chapter-title-lesson-title")
+    completed BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    UNIQUE (user_id, folder_id, lesson_id) -- Ensure unique progress per user, folder, and lesson
+);
+
+-- Add RLS policies for user_progress
+ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own progress"
+ON user_progress FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own progress"
+ON user_progress FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own progress"
+ON user_progress FOR UPDATE
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own progress" -- Might not be needed, but good practice
+ON user_progress FOR DELETE
+USING (auth.uid() = user_id);
+
+CREATE INDEX user_progress_user_id_idx ON user_progress(user_id);
+CREATE INDEX user_progress_folder_id_idx ON user_progress(folder_id);
+CREATE INDEX user_progress_lesson_id_idx ON user_progress(lesson_id); -- For efficient lookup
+
+COMMENT ON TABLE user_progress IS 'Stores user progress on individual lessons within a study plan';
+COMMENT ON COLUMN user_progress.lesson_id IS 'Unique identifier for the lesson (e.g., "chapter-title-lesson-title")'; 

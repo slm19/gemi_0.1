@@ -1,6 +1,7 @@
 // src/components/features/tabs/LessonDisplay.tsx
 import React from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, CheckCircle } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Lesson {
   title: string;
@@ -15,11 +16,13 @@ interface LessonDisplayProps {
   expanded: boolean;
   onToggle: () => void;
   navigateToLesson: (lessonTitle: string) => void;
+  isComplete: boolean;
+  onToggleComplete: (chapterTitle: string, lessonTitle:string) => void;
 }
 
-export function LessonDisplay({ lesson, chapterTitle, expanded, onToggle, navigateToLesson }: LessonDisplayProps) {
+export function LessonDisplay({ lesson, chapterTitle, expanded, onToggle, navigateToLesson, isComplete, onToggleComplete }: LessonDisplayProps) {
   return (
-    <div className="border rounded-lg p-4 bg-white shadow-sm">
+    <div className="border rounded-lg p-4 bg-white shadow-sm ml-8">
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <h4
@@ -38,6 +41,12 @@ export function LessonDisplay({ lesson, chapterTitle, expanded, onToggle, naviga
               <span>{lesson.estimatedDuration}</span>
             </div>
           </div>
+        </div>
+        <div>
+          <Checkbox
+            checked={isComplete}
+            onCheckedChange={() => onToggleComplete(chapterTitle, lesson.title)}
+          />
         </div>
       </div>
 

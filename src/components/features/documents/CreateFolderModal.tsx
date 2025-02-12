@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, X, File, AlertCircle } from 'lucide-react';
+import { Upload, X, File, AlertCircle, Loader2, XCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/supabaseClient';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useDocumentUpload, Document, ALLOWED_FILE_TYPES } from './DocumentUploadLogic';
 import { useRouter } from 'next/navigation';
+import { Progress } from "@/components/ui/progress";
 
 // Error types for better error handling (duplicated for now - consider a shared types file)
 type ErrorType =
