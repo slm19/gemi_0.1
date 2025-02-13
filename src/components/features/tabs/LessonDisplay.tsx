@@ -1,7 +1,6 @@
 // src/components/features/tabs/LessonDisplay.tsx
 import React from 'react';
 import { Clock, CheckCircle } from 'lucide-react';
-import { Checkbox } from "@/components/ui/checkbox"
 
 interface Lesson {
   title: string;
@@ -42,24 +41,7 @@ export function LessonDisplay({ lesson, chapterTitle, expanded, onToggle, naviga
             </div>
           </div>
         </div>
-        <div>
-          <Checkbox
-            checked={isComplete}
-            onCheckedChange={() => onToggleComplete(chapterTitle, lesson.title)}
-          />
-        </div>
       </div>
-
-      {expanded && (
-        <div className="mt-4 pl-4 border-l-2 border-gray-200">
-          <h5 className="text-sm font-medium mb-2">Key Points:</h5>
-          <ul className="list-disc pl-4 text-sm text-gray-600 space-y-1">
-            {lesson.keyPoints.map((point, pointIndex) => (
-              <li key={pointIndex}>{point}</li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 } 

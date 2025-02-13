@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from '@/components/features/tabs/OverviewTab';
 import { LearnTab } from '@/components/features/tabs/LearnTab';
 import { DocumentsTab } from '@/components/features/tabs/DocumentsTab';
+import { use } from 'react';
 
 interface Document {
   id: string;
@@ -25,7 +26,8 @@ interface Folder {
   documents: Document[];
 }
 
-export default function FolderPage({ params }: { params: { id: string } }) {
+export default function FolderPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const router = useRouter();
   const { user } = useAuth();
   const [folder, setFolder] = useState<Folder | null>(null);
@@ -41,7 +43,7 @@ export default function FolderPage({ params }: { params: { id: string } }) {
         const { data: folderData, error: folderError } = await supabase
           .from('folders')
           .select('*')
-          .eq('id', params.id)
+          .eq('id', resolvedParams.id)
           .eq('user_id', user.id)
           .single();
 
@@ -55,7 +57,7 @@ export default function FolderPage({ params }: { params: { id: string } }) {
         const { data: documents, error: docsError } = await supabase
           .from('documents')
           .select('*')
-          .eq('folder_id', params.id)
+          .eq('folder_id', resolvedParams.id)
           .eq('user_id', user.id);
 
         if (docsError) throw docsError;
@@ -74,7 +76,7 @@ export default function FolderPage({ params }: { params: { id: string } }) {
     }
 
     fetchFolder();
-  }, [params.id, user]);
+  }, [resolvedParams.id, user]);
 
   const handleDownload = async (document: Document) => {
     try {
