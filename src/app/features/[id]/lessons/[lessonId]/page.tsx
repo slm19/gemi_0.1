@@ -68,7 +68,6 @@ export default function LessonPage({
       try {
         setIsLoading(true);
         
-        // First get the study plan to find the lesson
         const { data: studyPlanData, error: studyPlanError } = await supabase
           .from('study_plans')
           .select('*')
@@ -86,12 +85,11 @@ export default function LessonPage({
         }
 
         const parsedStudyPlan = JSON.parse(studyPlanData.content);
-        setStudyPlan(parsedStudyPlan); // Store the entire study plan
+        setStudyPlan(parsedStudyPlan);
         let lessonInfo = null;
         let foundChapterIndex = -1;
         let foundLessonIndex = -1;
 
-        // Find the lesson in the study plan
         for (let i = 0; i < parsedStudyPlan.chapters.length; i++) {
           const chapter = parsedStudyPlan.chapters[i];
           const lessonIndex = chapter.lessons.findIndex((l: { title: string }) => 
@@ -111,7 +109,6 @@ export default function LessonPage({
           return;
         }
 
-        // Check if lesson content already exists in the database
         const { data: existingLesson, error: lessonError } = await supabase
           .from('lesson_contents')
           .select('*')
@@ -125,7 +122,6 @@ export default function LessonPage({
         }
 
         if (existingLesson?.content) {
-          // Use existing lesson content
           try {
             const parsedContent = JSON.parse(existingLesson.content);
             setLessonContent(parsedContent);
@@ -133,16 +129,8 @@ export default function LessonPage({
             return;
           } catch (parseError) {
             console.error('Error parsing existing lesson content:', parseError);
-            // Continue to generate new content if parsing fails
           }
         }
-
-        // If no existing content or parsing failed, generate new content
-        console.log('Calling Edge Function with:', {
-          lessonTitle: lessonInfo.title,
-          lessonDescription: lessonInfo.description,
-          keyPoints: lessonInfo.keyPoints,
-        });
 
         const { data: generatedContent, error: functionError } = await supabase.functions.invoke(
           'generate-lesson-content',
@@ -158,19 +146,14 @@ export default function LessonPage({
           }
         );
 
-        console.log('Edge Function response:', { generatedContent, functionError });
-
         if (functionError) {
-          console.error('Edge Function error:', functionError);
           throw new Error(functionError.message || 'Failed to generate lesson content');
         }
 
         if (!generatedContent?.lessonContent) {
-          console.error('Invalid Edge Function response:', generatedContent);
           throw new Error('Invalid response format - missing lesson content');
         }
 
-        // Store the generated content in the database using upsert
         const { error: upsertError } = await supabase
           .from('lesson_contents')
           .upsert(
@@ -202,56 +185,6 @@ export default function LessonPage({
 
     fetchLessonContent();
   }, [params.id, params.lessonId, user]);
-
-  const renderContentPage = () => (
-    <div className="prose prose-indigo max-w-none">
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Learning Objectives</h2>
-        <ul className="list-disc pl-6 space-y-2">
-          {lessonContent?.objectives.map((objective, index) => (
-            <li key={index} className="text-gray-700">{objective}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Content</h2>
-        <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-          {lessonContent?.content}
-        </div>
-      </div>
-
-      {lessonContent?.examples && lessonContent.examples.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Examples</h2>
-          <div className="space-y-6">
-            {lessonContent.examples.map((example, index) => (
-              <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                <h3 className="font-medium text-lg mb-3 text-gray-900">{example.title}</h3>
-                {example.code && (
-                  <div className="mb-4">
-                    <SyntaxHighlighter 
-                      language="javascript" 
-                      style={atomDark}
-                      className="rounded-md"
-                    >
-                      {example.code}
-                    </SyntaxHighlighter>
-                  </div>
-                )}
-                <p className="text-gray-700">{example.explanation}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
-        <h2 className="text-xl font-semibold mb-3">Summary</h2>
-        <p className="text-gray-700 leading-relaxed">{lessonContent?.summary}</p>
-      </div>
-    </div>
-  );
 
   const handleAnswerChange = (exerciseIndex: number, answer: string) => {
     setExerciseStates(prev => ({
@@ -367,6 +300,56 @@ export default function LessonPage({
     </div>
   );
 
+  const renderContentPage = () => (
+    <div className="prose prose-indigo max-w-none">
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Learning Objectives</h2>
+        <ul className="list-disc pl-6 space-y-2">
+          {lessonContent?.objectives.map((objective, index) => (
+            <li key={index} className="text-gray-700">{objective}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Content</h2>
+        <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+          {lessonContent?.content}
+        </div>
+      </div>
+
+      {lessonContent?.examples && lessonContent.examples.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Examples</h2>
+          <div className="space-y-6">
+            {lessonContent.examples.map((example, index) => (
+              <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                <h3 className="font-medium text-lg mb-3 text-gray-900">{example.title}</h3>
+                {example.code && (
+                  <div className="mb-4">
+                    <SyntaxHighlighter 
+                      language="javascript" 
+                      style={atomDark}
+                      className="rounded-md"
+                    >
+                      {example.code}
+                    </SyntaxHighlighter>
+                  </div>
+                )}
+                <p className="text-gray-700">{example.explanation}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h2 className="text-xl font-semibold mb-3">Summary</h2>
+        <p className="text-gray-700 leading-relaxed">{lessonContent?.summary}</p>
+      </div>
+    </div>
+  );
+
   const renderQuestionsPage = () => (
     <div className="prose prose-indigo max-w-none">
       <div className="mb-6">
@@ -425,9 +408,8 @@ export default function LessonPage({
                   'Submit Answer'
                 )}
               </Button>
-              {exerciseStates[index]?.analysis && (
-                renderAnalysis(exerciseStates[index]!.analysis)
-              )}
+
+              {exerciseStates[index]?.analysis && renderAnalysis(exerciseStates[index]!.analysis!)}
             </div>
           </div>
         ))}
@@ -443,12 +425,10 @@ export default function LessonPage({
 
     const currentChapter = studyPlan.chapters[chapterIndex];
 
-    // Check if there's a next lesson in the current chapter
     if (lessonIndex < currentChapter.lessons.length - 1) {
       const nextLesson = currentChapter.lessons[lessonIndex + 1];
       router.push(`/features/${params.id}/lessons/${nextLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
     } else if (chapterIndex < studyPlan.chapters.length - 1) {
-      // If it's the last lesson of the chapter, go to the first lesson of the next chapter
       const nextChapter = studyPlan.chapters[chapterIndex + 1];
       if (nextChapter.lessons.length > 0) {
         const nextLesson = nextChapter.lessons[0];
@@ -463,12 +443,10 @@ export default function LessonPage({
     const { chapterIndex, lessonIndex } = currentLessonIndex;
     if (chapterIndex === -1 || lessonIndex === -1) return;
 
-    // Check if there is a previous lesson within the current chapter
     if (lessonIndex > 0) {
       const previousLesson = studyPlan.chapters[chapterIndex].lessons[lessonIndex - 1];
       router.push(`/features/${params.id}/lessons/${previousLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
     } else if (chapterIndex > 0) {
-      // If it's the first lesson of the chapter, go to the last lesson of the previous chapter
       const previousChapter = studyPlan.chapters[chapterIndex - 1];
       const previousLesson = previousChapter.lessons[previousChapter.lessons.length - 1];
       router.push(`/features/${params.id}/lessons/${previousLesson.title.toLowerCase().replace(/\s+/g, '-')}`);
