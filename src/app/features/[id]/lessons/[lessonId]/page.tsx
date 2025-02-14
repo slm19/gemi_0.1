@@ -425,8 +425,9 @@ export default function LessonPage({
                   'Submit Answer'
                 )}
               </Button>
-
-              {exerciseStates[index]?.analysis && renderAnalysis(exerciseStates[index]!.analysis)}
+              {exerciseStates[index]?.analysis && (
+                renderAnalysis(exerciseStates[index]!.analysis)
+              )}
             </div>
           </div>
         ))}
