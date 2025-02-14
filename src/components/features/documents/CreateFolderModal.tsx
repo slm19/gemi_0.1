@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useDocumentUpload, Document, ALLOWED_FILE_TYPES } from './DocumentUploadLogic';
 import { useRouter } from 'next/navigation';
 import { Progress } from "@/components/ui/progress";
+import { generateStudyPlan as generateStudyPlanEdge } from '@/lib/supabase/edgeFunctions';
 
 // Error types for better error handling (duplicated for now - consider a shared types file)
 type ErrorType =
@@ -80,6 +81,57 @@ export default function CreateFolderModal({ isOpen, onClose, onFolderCreated }: 
 
         // Upload files and create document records (using shared logic)
         const uploadedDocs = await uploadFiles(tempFiles, folder.id, user);
+        
+        // Generate study plan automatically
+        try {
+          // First, get the content of each document
+          const documentsWithContent = await Promise.all(
+            uploadedDocs.map(async (doc) => {
+              try {
+                const { data, error } = await supabase.storage
+                  .from('documents')
+                  .download(doc.path);
+
+                if (error) throw error;
+                const content = await data.text();
+                return { ...doc, content };
+              } catch (error) {
+                console.error(`Error downloading document ${doc.name}:`, error);
+                return { ...doc, content: '' };
+              }
+            })
+          );
+
+          // Prepare the documents content for the Edge Function
+          const documentsData = documentsWithContent.map(doc => ({
+            name: doc.name,
+            content: doc.content
+          }));
+
+          // Generate the study plan
+          const generatedPlan = await generateStudyPlanEdge(documentsData);
+
+          // Store the generated plan
+          const { error: storageError } = await supabase
+            .from('study_plans')
+            .upsert({
+              user_id: user.id,
+              folder_id: folder.id,
+              content: JSON.stringify(generatedPlan),
+              created_at: new Date().toISOString()
+            }, {
+              onConflict: 'folder_id,user_id'
+            });
+
+          if (storageError) {
+            console.error('Error saving study plan:', storageError);
+          }
+
+        } catch (studyPlanErr) {
+          console.error('Error in study plan generation:', studyPlanErr);
+          // Don't throw error here, we still want to complete folder creation
+        }
+
         onFolderCreated({
           ...folder, 
           created_at: new Date(folder.created_at), 

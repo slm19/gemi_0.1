@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, File, Download, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/supabaseClient';
@@ -10,6 +10,7 @@ import { OverviewTab } from '@/components/features/tabs/OverviewTab';
 import { LearnTab } from '@/components/features/tabs/LearnTab';
 import { DocumentsTab } from '@/components/features/tabs/DocumentsTab';
 import { use } from 'react';
+import { InitialLoadingDialog } from '@/components/features/documents/InitialLoadingDialog';
 
 interface Document {
   id: string;
@@ -31,15 +32,25 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
   const { user } = useAuth();
   const [folder, setFolder] = useState<Folder | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function fetchFolder() {
-      try {
-        if (!user) return;
+      if (!user) return;
 
-        // Fetch folder
+      try {
+        setIsInitialLoading(true);
+        setError(null);
+
+        // Set timeout for loading
+        timeoutRef.current = setTimeout(() => {
+          setIsInitialLoading(false);
+          setError("Loading timed out. Please check your connection and try again.");
+        }, 60000);
+
+        // Fetch folder data
         const { data: folderData, error: folderError } = await supabase
           .from('folders')
           .select('*')
@@ -49,8 +60,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
         if (folderError) throw folderError;
         if (!folderData) {
-          setError('Folder not found');
-          return;
+          throw new Error('Folder not found');
         }
 
         // Fetch documents
@@ -67,15 +77,24 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           created_at: new Date(folderData.created_at),
           documents: documents || []
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching folder:', error);
-        setError('Failed to load folder');
+        setError(error.message || 'Failed to load folder');
       } finally {
-        setIsLoading(false);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        setIsInitialLoading(false);
       }
     }
 
     fetchFolder();
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [resolvedParams.id, user]);
 
   const handleDownload = async (document: Document) => {
@@ -129,25 +148,13 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-lg text-gray-600">Loading folder...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !folder) {
+  if (error) {
     return (
       <div className="min-h-screen p-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              {error || 'Folder not found'}
+              {error}
             </h1>
             <button
               onClick={() => router.push('/')}
@@ -164,46 +171,52 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-6xl mx-auto p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={() => router.push('/')}
-            className="text-gray-600 hover:text-gray-900 flex items-center gap-2 mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Folders
-          </button>
-          <h1 className="text-3xl font-bold text-gray-900">{folder.name}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Created on {folder.created_at.toLocaleDateString()}
-          </p>
-        </div>
-
-        {/* Tabs Interface */}
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="w-full justify-start">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="learn">Learn</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
-          <div className="mt-6">
-            <TabsContent value="overview">
-              <OverviewTab />
-            </TabsContent>
-            <TabsContent value="learn">
-              <LearnTab documents={folder.documents} folderId={folder.id} />
-            </TabsContent>
-            <TabsContent value="documents">
-              <DocumentsTab
-                documents={folder.documents}
-                onDownload={handleDownload}
-                onDelete={handleDelete}
-              />
-            </TabsContent>
+      <InitialLoadingDialog 
+        isLoading={isInitialLoading} 
+        loadingText="Fetching folder and documents..." 
+      />
+      {!isInitialLoading && folder && (
+        <div className="max-w-6xl mx-auto p-8">
+          {/* Header */}
+          <div className="mb-8">
+            <button
+              onClick={() => router.push('/')}
+              className="text-gray-600 hover:text-gray-900 flex items-center gap-2 mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Folders
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900">{folder.name}</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Created on {folder.created_at.toLocaleDateString()}
+            </p>
           </div>
-        </Tabs>
-      </div>
+
+          {/* Tabs Interface */}
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="learn">Learn</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
+            </TabsList>
+            <div className="mt-6">
+              <TabsContent value="overview">
+                <OverviewTab />
+              </TabsContent>
+              <TabsContent value="learn">
+                <LearnTab documents={folder.documents} folderId={folder.id} />
+              </TabsContent>
+              <TabsContent value="documents">
+                <DocumentsTab
+                  documents={folder.documents}
+                  onDownload={handleDownload}
+                  onDelete={handleDelete}
+                />
+              </TabsContent>
+            </div>
+          </Tabs>
+        </div>
+      )}
     </div>
   );
 } 

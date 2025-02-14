@@ -17,6 +17,7 @@ import { LessonDisplay } from './LessonDisplay';
 import { Checkbox } from "@/components/ui/checkbox"
 import { motion } from 'framer-motion';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { useStudyPlan } from '@/lib/contexts/StudyPlanContext';
 
 interface Document {
   id: string;
@@ -85,7 +86,7 @@ const getUserFriendlyErrorMessage = (error: AppError): string => {
 
 export function LearnTab({ documents = [], folderId }: Props) {
   const { user } = useAuth();
-  const [studyPlan, setStudyPlan] = useState<StudyPlan | null>(null);
+  const { studyPlan, setStudyPlan, fetchStudyPlan } = useStudyPlan();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -93,12 +94,10 @@ export function LearnTab({ documents = [], folderId }: Props) {
   const [retryCount, setRetryCount] = useState(0);
   const [generationTime, setGenerationTime] = useState<number | null>(null);
   const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000; // 2 seconds
-  const GENERATION_TIMEOUT = 60000; // 60 seconds timeout
+  const RETRY_DELAY = 2000;
+  const GENERATION_TIMEOUT = 60000;
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
   const [expandedLessons, setExpandedLessons] = useState<Record<string, boolean>>({});
-  const [userProgress, setUserProgress] = useState<Record<string, boolean>>({}); // lessonId: completed
-  const [overallProgress, setOverallProgress] = useState(0);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const router = useRouter();
 
@@ -132,136 +131,43 @@ export function LearnTab({ documents = [], folderId }: Props) {
     router.push(`/features/${folderId}/lessons/${lessonId}`);
   }, [folderId, router]);
 
-  const fetchStudyPlan = useCallback(async () => {
-    if (!user || !folderId) {
-      setGenerationStatus('idle');
-      return false;
-    }
+  // Update the useEffect to use the context's fetchStudyPlan
+  useEffect(() => {
+    let mounted = true;
 
-    try {
+    const loadStudyPlan = async () => {
+      if (!user?.id || !folderId) return;
+      
+      setLoading(true);
       setGenerationStatus('fetching');
-      const { data, error } = await supabase
-        .from('study_plans')
-        .select('*')
-        .eq('folder_id', folderId)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      
+      try {
+        const plan = await fetchStudyPlan(folderId, user.id);
+        
+        if (!mounted) return;
 
-      if (error) {
-        console.error('Error fetching study plan:', error);
-        setError({
-          type: 'FETCH_ERROR',
-          message: 'Failed to fetch study plan',
-          details: error
-        });
-        setGenerationStatus('idle');
-        return false;
-      }
-
-      if (data) {
-        try {
-          const parsedContent = JSON.parse(data.content);
-          setStudyPlan(parsedContent);
-          if (parsedContent.chapters?.[0]?.title) {
-            setExpandedChapters(prev => ({
-              ...prev,
-              [parsedContent.chapters[0].title]: true
-            }));
-          }
+        if (plan && plan.chapters?.[0]?.title) {
+          setExpandedChapters(prev => ({
+            ...prev,
+            [plan.chapters[0].title]: true
+          }));
+        }
+      } catch (err) {
+        console.error('Error loading study plan:', err);
+      } finally {
+        if (mounted) {
           setGenerationStatus('idle');
-          setError(null);
-          return true;
-        } catch (parseError) {
-          console.error('Error parsing study plan content:', parseError);
-          setError({
-            type: 'VALIDATION_ERROR',
-            message: 'Invalid study plan format',
-            details: parseError
-          });
-          setGenerationStatus('idle');
-          return false;
+          setLoading(false);
         }
       }
-      setGenerationStatus('idle');
-      return false;
-    } catch (err) {
-      console.error('Error:', err);
-      setError({
-        type: 'FETCH_ERROR',
-        message: 'Failed to fetch study plan',
-        details: err
-      });
-      setGenerationStatus('idle');
-      return false;
-    }
-  }, [folderId, user]);
+    };
 
-  const fetchUserProgress = useCallback(async () => {
-    if (!user || !folderId) return;
+    loadStudyPlan();
 
-    try {
-      const { data, error } = await supabase
-        .from('user_progress')
-        .select('lesson_id, completed')
-        .eq('user_id', user.id)
-        .eq('folder_id', folderId);
-
-      if (error) throw error;
-      if(data){
-        const progress: Record<string, boolean> = {};
-        data.forEach(item => {
-          progress[item.lesson_id] = item.completed;
-        });
-        setUserProgress(progress);
-      }
-
-    } catch (error) {
-      console.error('Error fetching user progress:', error);
-      // Don't set an error here, just log it. We don't want to prevent
-      // the study plan from loading if progress fetching fails.
-    }
-  }, [user, folderId]);
-
-  const handleToggleComplete = useCallback(async (chapterTitle: string, lessonTitle: string) => {
-    if (!user || !folderId) return;
-
-    const lessonId = `${chapterTitle}-${lessonTitle}`;
-    const newCompletedStatus = !userProgress[lessonId];
-
-    try {
-      const { error } = await supabase
-        .from('user_progress')
-        .upsert({
-          user_id: user.id,
-          folder_id: folderId,
-          lesson_id: lessonId,
-          completed: newCompletedStatus,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id,folder_id,lesson_id' });
-
-      if (error) throw error;
-
-      // Optimistically update the local state
-      setUserProgress(prev => ({
-        ...prev,
-        [lessonId]: newCompletedStatus
-      }));
-    } catch (error) {
-      console.error('Error updating lesson completion status:', error);
-      // Optionally, revert the optimistic update on error
-    }
-  }, [user, folderId, userProgress]);
-
-  // Add useEffect to fetch study plan and user progress on mount
-  useEffect(() => {
-    if (folderId && user) {
-      setLoading(true);
-      fetchStudyPlan()
-        .then(() => fetchUserProgress())
-        .finally(() => setLoading(false));
-    }
-  }, [folderId, user, fetchStudyPlan, fetchUserProgress]);
+    return () => {
+      mounted = false;
+    };
+  }, [folderId, user?.id]);
 
   const retryWithDelay = async (operation: () => Promise<void>) => {
     try {
@@ -279,6 +185,7 @@ export function LearnTab({ documents = [], folderId }: Props) {
     }
   };
 
+  // Update the generateStudyPlan function to use setStudyPlan from context
   const generateStudyPlan = useCallback(async () => {
     if (!documents || documents.length === 0 || !user || !folderId || isGenerating) {
       console.log('Skipping generation due to:', {
@@ -295,7 +202,7 @@ export function LearnTab({ documents = [], folderId }: Props) {
     setIsGenerating(true);
     setError(null);
     setGenerationStatus('generating');
-    setRetryCount(0); // Reset retry count at the start
+    setRetryCount(0);
 
     const tryGenerate = async (attempt: number) => {
       try {
@@ -383,9 +290,8 @@ export function LearnTab({ documents = [], folderId }: Props) {
       }
     };
 
-    tryGenerate(0); // Start the generation process
-
-  }, [documents, user, folderId, isGenerating, GENERATION_TIMEOUT]);
+    tryGenerate(0);
+  }, [documents, user, folderId, isGenerating, GENERATION_TIMEOUT, setStudyPlan]);
 
   // Helper function to format time
   const formatGenerationTime = (ms: number) => {
@@ -398,31 +304,6 @@ export function LearnTab({ documents = [], folderId }: Props) {
     }
     return `${seconds}s`;
   };
-
-  const calculateOverallProgress = useCallback(() => {
-    if (!studyPlan?.chapters) {
-      return 0;
-    }
-
-    let totalLessons = 0;
-    let completedLessons = 0;
-
-    studyPlan.chapters.forEach(chapter => {
-      chapter.lessons.forEach(lesson => {
-        totalLessons++;
-        const lessonId = `${chapter.title}-${lesson.title}`;
-        if (userProgress[lessonId]) {
-          completedLessons++;
-        }
-      });
-    });
-
-    return totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-  }, [studyPlan, userProgress]);
-
-  useEffect(() => {
-    setOverallProgress(calculateOverallProgress());
-  }, [calculateOverallProgress]);
 
   if (!documents || documents.length === 0) {
     return (
@@ -442,12 +323,6 @@ export function LearnTab({ documents = [], folderId }: Props) {
               <BookOpen className="w-5 h-5 text-blue-500" />
               Your Learning Path
             </CardTitle>
-            {overallProgress > 0 && (
-              <div className="flex items-center gap-2 mt-1">
-                <Progress value={overallProgress} className="h-2 w-32" />
-                <span className="text-xs text-muted-foreground">{overallProgress}% Complete</span>
-              </div>
-            )}
             {generationTime && !loading && !isGenerating && (
               <p className="text-xs text-muted-foreground mt-1">
                 Generated in {formatGenerationTime(generationTime)}
@@ -467,8 +342,7 @@ export function LearnTab({ documents = [], folderId }: Props) {
                     isGenerating,
                     generationStatus,
                     expandedChapters,
-                    expandedLessons,
-                    userProgress
+                    expandedLessons
                   });
                 }}
               >
@@ -491,7 +365,7 @@ export function LearnTab({ documents = [], folderId }: Props) {
                   <DialogHeader>
                     <DialogTitle>Regenerate Study Plan?</DialogTitle>
                     <DialogDescription>
-                      Are you sure you want to regenerate the study plan? This will overwrite the existing plan, but your completion progress will be preserved.
+                      Are you sure you want to regenerate the study plan?
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
@@ -553,8 +427,6 @@ export function LearnTab({ documents = [], folderId }: Props) {
                     expandedLessons={expandedLessons}
                     onToggleLesson={toggleLesson}
                     navigateToLesson={navigateToLesson}
-                    userProgress={userProgress}
-                    onToggleComplete={handleToggleComplete}
                   />
                 ))}
               </div>
