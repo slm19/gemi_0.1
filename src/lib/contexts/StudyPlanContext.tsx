@@ -34,8 +34,39 @@ export function StudyPlanProvider({ children }: { children: ReactNode }) {
       if (!folderId || !userId) {
         return null;
       }
-      setCurrentFolderId(folderId);
-      return studyPlan;
+
+      // If we already have the study plan for this folder, return it
+      if (currentFolderId === folderId && studyPlan) {
+        return studyPlan;
+      }
+
+      const { data, error } = await supabase
+        .from('study_plans')
+        .select('*')
+        .eq('folder_id', folderId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching study plan:', error);
+        return null;
+      }
+
+      if (data) {
+        try {
+          const parsedContent = JSON.parse(data.content);
+          setStudyPlan(parsedContent);
+          setCurrentFolderId(folderId);
+          return parsedContent;
+        } catch (parseError) {
+          console.error('Error parsing study plan content:', parseError);
+          return null;
+        }
+      }
+
+      setStudyPlan(null);
+      setCurrentFolderId(null);
+      return null;
     } catch (err) {
       console.error('Error:', err);
       return null;
