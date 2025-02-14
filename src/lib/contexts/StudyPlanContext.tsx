@@ -30,47 +30,17 @@ export function StudyPlanProvider({ children }: { children: ReactNode }) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
 
   const fetchStudyPlan = useCallback(async (folderId: string, userId: string) => {
-    // If we already have the study plan for this folder, return it
-    if (currentFolderId === folderId && studyPlan) {
-      console.log('Returning cached study plan for folder:', folderId);
-      return studyPlan;
-    }
-
-    console.log('Fetching study plan for folder:', folderId);
     try {
-      const { data, error } = await supabase
-        .from('study_plans')
-        .select('*')
-        .eq('folder_id', folderId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching study plan:', error);
+      if (!folderId || !userId) {
         return null;
       }
-
-      if (data) {
-        try {
-          const parsedContent = JSON.parse(data.content);
-          setStudyPlan(parsedContent);
-          setCurrentFolderId(folderId);
-          return parsedContent;
-        } catch (parseError) {
-          console.error('Error parsing study plan content:', parseError);
-          return null;
-        }
-      }
-      
-      // If no data found, clear the current state
-      setStudyPlan(null);
-      setCurrentFolderId(null);
-      return null;
+      setCurrentFolderId(folderId);
+      return studyPlan;
     } catch (err) {
       console.error('Error:', err);
       return null;
     }
-  }, [currentFolderId]); // Remove studyPlan from dependencies
+  }, [currentFolderId, studyPlan]);
 
   const clearStudyPlan = useCallback(() => {
     setStudyPlan(null);

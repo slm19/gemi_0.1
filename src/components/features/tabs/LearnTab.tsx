@@ -134,40 +134,19 @@ export function LearnTab({ documents = [], folderId }: Props) {
   // Update the useEffect to use the context's fetchStudyPlan
   useEffect(() => {
     let mounted = true;
-
     const loadStudyPlan = async () => {
-      if (!user?.id || !folderId) return;
-      
-      setLoading(true);
-      setGenerationStatus('fetching');
-      
-      try {
-        const plan = await fetchStudyPlan(folderId, user.id);
-        
-        if (!mounted) return;
-
-        if (plan && plan.chapters?.[0]?.title) {
-          setExpandedChapters(prev => ({
-            ...prev,
-            [plan.chapters[0].title]: true
-          }));
-        }
-      } catch (err) {
-        console.error('Error loading study plan:', err);
-      } finally {
-        if (mounted) {
-          setGenerationStatus('idle');
-          setLoading(false);
-        }
+      if (!user?.id) return;
+      const plan = await fetchStudyPlan(folderId, user.id);
+      if (mounted && plan) {
+        setStudyPlan(plan);
       }
     };
-
     loadStudyPlan();
 
     return () => {
       mounted = false;
     };
-  }, [folderId, user?.id]);
+  }, [folderId, user?.id, fetchStudyPlan]);
 
   const retryWithDelay = async (operation: () => Promise<void>) => {
     try {

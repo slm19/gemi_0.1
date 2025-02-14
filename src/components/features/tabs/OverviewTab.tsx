@@ -129,15 +129,15 @@ export function OverviewTab() {
             <ul className="space-y-2">
               <li className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                Completed "Basics of Nuclear Physics" module
+                Completed &quot;Basics of Nuclear Physics&quot; module
               </li>
               <li className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                Achieved 100% on "Atomic Structure" quiz
+                Achieved 100% on &quot;Atomic Structure&quot; quiz
               </li>
               <li className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                Earned "Nuclear Novice" badge
+                Earned &quot;Nuclear Novice&quot; badge
               </li>
             </ul>
           </div>
