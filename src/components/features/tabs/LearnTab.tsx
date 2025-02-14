@@ -411,7 +411,7 @@ export function LearnTab({ documents = [], folderId }: Props) {
               </div>
             ) : (
               <div className="text-center p-4 text-gray-500">
-                <p>No study plan generated yet. Click &quot;Regenerate Plan&quot; to create one.</p>
+                <p>No study plan generated yet. Click "Regenerate Plan" to create one.</p>
               </div>
             )}
           </ScrollArea>
