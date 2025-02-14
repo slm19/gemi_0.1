@@ -58,8 +58,8 @@ export default function LessonPage({
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<PageType>('content');
   const [exerciseStates, setExerciseStates] = useState<Record<number, ExerciseState>>({});
-  const [studyPlan, setStudyPlan] = useState<any>(null); // Keep track of the entire study plan
-  const [currentLessonIndex, setCurrentLessonIndex] = useState<{ chapterIndex: number, lessonIndex: number }>({ chapterIndex: -1, lessonIndex: -1, });
+  const [studyPlan, setStudyPlan] = useState<any>(null);
+  const [currentLessonIndex, setCurrentLessonIndex] = useState<{ chapterIndex: number, lessonIndex: number }>({ chapterIndex: -1, lessonIndex: -1 });
 
   useEffect(() => {
     async function fetchLessonContent() {
@@ -209,14 +209,16 @@ export default function LessonPage({
         <h2 className="text-xl font-semibold mb-4">Learning Objectives</h2>
         <ul className="list-disc pl-6 space-y-2">
           {lessonContent?.objectives.map((objective, index) => (
-            <li key={index}>{objective}</li>
+            <li key={index} className="text-gray-700">{objective}</li>
           ))}
         </ul>
       </div>
 
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Content</h2>
-        <div className="whitespace-pre-wrap">{lessonContent?.content}</div>
+        <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+          {lessonContent?.content}
+        </div>
       </div>
 
       {lessonContent?.examples && lessonContent.examples.length > 0 && (
@@ -224,23 +226,29 @@ export default function LessonPage({
           <h2 className="text-xl font-semibold mb-4">Examples</h2>
           <div className="space-y-6">
             {lessonContent.examples.map((example, index) => (
-              <div key={index} className="bg-white p-4 rounded-lg border">
-                <h3 className="font-medium mb-2">{example.title}</h3>
+              <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                <h3 className="font-medium text-lg mb-3 text-gray-900">{example.title}</h3>
                 {example.code && (
-                  <SyntaxHighlighter language="javascript" style={atomDark}>
-                    {example.code}
-                  </SyntaxHighlighter>
+                  <div className="mb-4">
+                    <SyntaxHighlighter 
+                      language="javascript" 
+                      style={atomDark}
+                      className="rounded-md"
+                    >
+                      {example.code}
+                    </SyntaxHighlighter>
+                  </div>
                 )}
-                <p>{example.explanation}</p>
+                <p className="text-gray-700">{example.explanation}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <h2 className="text-xl font-semibold mb-2">Summary</h2>
-        <p>{lessonContent?.summary}</p>
+      <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h2 className="text-xl font-semibold mb-3">Summary</h2>
+        <p className="text-gray-700 leading-relaxed">{lessonContent?.summary}</p>
       </div>
     </div>
   );
@@ -312,40 +320,43 @@ export default function LessonPage({
     <div className="mt-6 space-y-4">
       <div className="flex items-center gap-2">
         {analysis.isCorrect ? (
-          <CheckCircle2 className="w-5 h-5 text-green-500" />
+          <div className="flex items-center gap-2 text-green-600">
+            <CheckCircle2 className="w-5 h-5" />
+            <span className="font-medium">Correct Answer!</span>
+          </div>
         ) : (
-          <XCircle className="w-5 h-5 text-red-500" />
+          <div className="flex items-center gap-2 text-red-600">
+            <XCircle className="w-5 h-5" />
+            <span className="font-medium">Needs Improvement</span>
+          </div>
         )}
-        <span className="font-medium">
-          Score: {analysis.score}/100
-        </span>
       </div>
 
-      <Alert>
+      <Alert variant={analysis.isCorrect ? "default" : "destructive"}>
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Feedback</AlertTitle>
-        <AlertDescription>{analysis.feedback}</AlertDescription>
+        <AlertDescription className="mt-2">{analysis.feedback}</AlertDescription>
       </Alert>
 
       {analysis.suggestions.length > 0 && (
-        <div>
-          <h4 className="font-medium mb-2">Suggestions for Improvement:</h4>
-          <ul className="list-disc pl-5 space-y-1">
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <h4 className="font-medium text-gray-900 mb-3">Suggestions for Improvement:</h4>
+          <ul className="list-disc pl-5 space-y-2">
             {analysis.suggestions.map((suggestion, index) => (
-              <li key={index} className="text-sm">{suggestion}</li>
+              <li key={index} className="text-gray-700">{suggestion}</li>
             ))}
           </ul>
         </div>
       )}
 
       {analysis.conceptsToReview.length > 0 && (
-        <div>
-          <h4 className="font-medium mb-2">Concepts to Review:</h4>
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <h4 className="font-medium text-gray-900 mb-3">Concepts to Review:</h4>
           <div className="flex flex-wrap gap-2">
             {analysis.conceptsToReview.map((concept, index) => (
               <span
                 key={index}
-                className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium"
               >
                 {concept}
               </span>
@@ -358,23 +369,43 @@ export default function LessonPage({
 
   const renderQuestionsPage = () => (
     <div className="prose prose-indigo max-w-none">
-      <h2 className="text-xl font-semibold mb-6">Practice Exercises</h2>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold">Practice Exercises</h2>
+        <p className="text-gray-600 mt-2">
+          Complete these exercises to test your understanding of the lesson content.
+        </p>
+      </div>
+
       <div className="space-y-12">
         {lessonContent?.exercises.map((exercise, index) => (
-          <div key={index} className="bg-white p-6 rounded-lg border">
-            <h3 className="font-medium text-lg mb-4">Exercise {index + 1}:</h3>
-            <p className="mb-6">{exercise.question}</p>
+          <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">
+                Exercise {index + 1}
+              </div>
+              {exerciseStates[index]?.analysis && (
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  exerciseStates[index]?.analysis?.isCorrect 
+                    ? 'bg-green-100 text-green-700' 
+                    : 'bg-red-100 text-red-700'
+                }`}>
+                  Score: {exerciseStates[index]?.analysis?.score}/100
+                </div>
+              )}
+            </div>
+            
+            <p className="text-gray-800 text-lg mb-6">{exercise.question}</p>
             
             <div className="space-y-4">
               <Textarea
                 placeholder="Type your answer here..."
                 value={exerciseStates[index]?.answer || ''}
                 onChange={(e) => handleAnswerChange(index, e.target.value)}
-                className="min-h-[120px]"
+                className="min-h-[120px] w-full"
               />
 
               {exercise.hint && (
-                <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                   <p className="text-blue-800 font-medium mb-1">💡 Hint:</p>
                   <p className="text-blue-700">{exercise.hint}</p>
                 </div>
@@ -395,9 +426,7 @@ export default function LessonPage({
                 )}
               </Button>
 
-              {exerciseStates[index]?.analysis && (
-                renderAnalysis(exerciseStates[index].analysis)
-              )}
+              {exerciseStates[index]?.analysis && renderAnalysis(exerciseStates[index]!.analysis)}
             </div>
           </div>
         ))}
@@ -489,15 +518,27 @@ export default function LessonPage({
             <ArrowLeftCircle className="w-5 h-5" />
             Back to Learning Path
           </button>
-          <div className="flex items-center gap-2">
-            <div className={`h-3 w-3 rounded-full ${currentPage === 'content' ? 'bg-indigo-600' : 'bg-gray-300'}`} />
-            <div className={`h-3 w-3 rounded-full ${currentPage === 'questions' ? 'bg-indigo-600' : 'bg-gray-300'}`} />
+          <div className="flex items-center gap-4">
+            <Button
+              variant={currentPage === 'content' ? 'default' : 'outline'}
+              onClick={() => setCurrentPage('content')}
+              className="flex items-center gap-2"
+            >
+              Content
+            </Button>
+            <Button
+              variant={currentPage === 'questions' ? 'default' : 'outline'}
+              onClick={() => setCurrentPage('questions')}
+              className="flex items-center gap-2"
+            >
+              Practice
+            </Button>
           </div>
         </div>
 
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle className="text-3xl">{lessonContent.title}</CardTitle>
+            <CardTitle className="text-3xl">{lessonContent?.title}</CardTitle>
           </CardHeader>
           <CardContent>
             {currentPage === 'content' ? renderContentPage() : renderQuestionsPage()}
@@ -505,31 +546,27 @@ export default function LessonPage({
         </Card>
 
         <div className="flex justify-between items-center mt-8">
-          <div>
-            <Button
-              onClick={navigateToPreviousLesson}
-              disabled={currentLessonIndex.chapterIndex === 0 && currentLessonIndex.lessonIndex === 0}
-              className="flex items-center gap-2"
-              variant="outline"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Previous
-            </Button>
-          </div>
+          <Button
+            onClick={navigateToPreviousLesson}
+            disabled={currentLessonIndex.chapterIndex === 0 && currentLessonIndex.lessonIndex === 0}
+            className="flex items-center gap-2"
+            variant="outline"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Previous Lesson
+          </Button>
           
-          <div>
-            <Button
-              onClick={navigateToNextLesson}
-              disabled={
-                currentLessonIndex.chapterIndex === studyPlan.chapters.length - 1 &&
-                currentLessonIndex.lessonIndex === studyPlan.chapters[currentLessonIndex.chapterIndex].lessons.length - 1
-              }
-              className="flex items-center gap-2"
-            >
-              Next
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button
+            onClick={navigateToNextLesson}
+            disabled={
+              currentLessonIndex.chapterIndex === (studyPlan?.chapters.length ?? 0) - 1 &&
+              currentLessonIndex.lessonIndex === (studyPlan?.chapters[currentLessonIndex.chapterIndex]?.lessons.length ?? 0) - 1
+            }
+            className="flex items-center gap-2"
+          >
+            Next Lesson
+            <ArrowRight className="w-4 h-4" />
+          </Button>
         </div>
       </div>
     </div>
