@@ -60,7 +60,7 @@ export function useDocumentUpload(props?: DocumentUploadLogicProps) {
   // Sequential fetch helper
   const fetchWithRetry = async <T,>(
     operation: () => Promise<T>,
-    retryCount = RETRY_CONFIG.maxRetries
+    retryCount: number = RETRY_CONFIG.maxRetries // Explicitly type as number
   ): Promise<T> => {
     try {
       return await operation();
